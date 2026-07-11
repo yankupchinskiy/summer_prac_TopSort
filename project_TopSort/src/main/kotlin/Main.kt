@@ -1,24 +1,29 @@
-import graphCL.*
-import logic.*
+import graphCL.Graph
+import graphCL.GraphJsonParser
+import graphCL.GraphParseException
+import logic.SortMode
+import logic.topologicalSortKahn
 import java.io.File
 
-
-
+// Читает граф из JSON-файла и преобразует его во внутреннюю модель Graph.
+// Возвращает null, если файл не удалось прочитать
+// или JSON имеет неверный формат.
 fun parceJson(path: String): Graph? {
     val input = try {
         File(path).readText(Charsets.UTF_8)
     } catch (e: Exception) {
         System.err.println("Failed to read file '$path': ${e.message}")
-        return null // Возвращаем null при ошибке чтения
+        return null
     }
 
     val graph = try {
         GraphJsonParser.parse(input)
     } catch (e: GraphParseException) {
         System.err.println("Parse error: ${e.message}")
-        return null // Возвращаем null при ошибке парсинга
+        return null
     }
 
+    // Выводим загруженный граф, чтобы сразу проверить входные данные.
     println("Graph loaded successfully.")
     println("Vertices: ${graph.vertices.size}")
     for (vertex in graph.vertices.values) {
@@ -29,13 +34,16 @@ fun parceJson(path: String): Graph? {
         println("  ${edge.from.value} -> ${edge.to.value}")
     }
 
-    return graph // Возвращаем успешно распарсенный граф
+    return graph
 }
 
 fun main(args: Array<String>) {
+    // Выбираем режим показа алгоритма:
+    // полностью автоматический или пошаговый.
+    val sortFlag = SortMode.AUTOMATIC
 
-    val SortFlag = SortMode.AUTOMATIC
-
+    // Если путь не передан явно, берём graph.json
+    // из текущей рабочей папки.
     val path = args.firstOrNull() ?: "graph.json"
 
     if (args.isEmpty()) {
@@ -48,7 +56,9 @@ fun main(args: Array<String>) {
         println("Не удалось загрузить граф. Завершение работы.")
         return
     }
-    if (SortFlag == SortMode.AUTOMATIC) {
+
+    // После загрузки графа запускаем выбранный режим сортировки.
+    if (sortFlag == SortMode.AUTOMATIC) {
         println(" АВТОМАТИЧЕСКИЙ РЕЖИМ ")
         val autoResult = graph.topologicalSortKahn(mode = SortMode.AUTOMATIC)
         if (autoResult != null) {
@@ -56,15 +66,13 @@ fun main(args: Array<String>) {
         } else {
             println("\nАвтоматический режим: Топологическая сортировка невозможна (в графе есть цикл).")
         }
-    }
-    else if (SortFlag == SortMode.STEP_BY_STEP) {
+    } else if (sortFlag == SortMode.STEP_BY_STEP) {
         println("\n\n ПОШАГОВЫЙ РЕЖИМ ")
         val stepByStepResult = graph.topologicalSortKahn(mode = SortMode.STEP_BY_STEP)
         if (stepByStepResult != null) {
-            println("\nИтог пошагового режима: ${stepByStepResult?.map { it.value }}")
+            println("\nИтог пошагового режима: ${stepByStepResult.map { it.value }}")
         } else {
-            println("\nпошаговый режим: Топологическая сортировка невозможна (в графе есть цикл).")
-
+            println("\nПошаговый режим: Топологическая сортировка невозможна (в графе есть цикл).")
         }
     }
 }
