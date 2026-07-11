@@ -1,4 +1,4 @@
-package classes
+package graphCL
 
 data class Edge(
     val from: VertexId,

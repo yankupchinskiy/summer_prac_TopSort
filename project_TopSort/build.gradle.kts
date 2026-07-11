@@ -19,3 +19,7 @@ kotlin {
 application {
     mainClass.set("MainKt")
 }
+
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in` // Обратите внимание на обратные кавычки вокруг in
+}
