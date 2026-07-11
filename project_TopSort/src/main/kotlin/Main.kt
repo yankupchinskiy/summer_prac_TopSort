@@ -1,8 +1,16 @@
+import classes.Edge
+import classes.Graph
+import classes.Vertex
+import classes.VertexId
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.io.File
 
+
+
+
+/*
 data class VertexId(val value: String)
 
 data class Vertex(
@@ -11,15 +19,16 @@ data class Vertex(
     val y: Int
 )
 
-data class Edge(
+data class classes.Edge(
     val from: VertexId,
     val to: VertexId
 )
 
-data class Graph(
+data class classes.Graph(
     val vertices: Map<VertexId, Vertex>,
-    val edges: List<Edge>
+    val edges: List<classes.Edge>
 )
+*/
 
 class GraphParseException(message: String) : Exception(message)
 
@@ -59,22 +68,22 @@ object GraphJsonParser {
 
         for ((edgeIndex, pair) in payload.edges.withIndex()) {
             if (pair.size != 2) {
-                throw GraphParseException("Edge at index $edgeIndex must contain exactly two vertex ids.")
+                throw GraphParseException("classes.Edge at index $edgeIndex must contain exactly two vertex ids.")
             }
 
             val fromText = pair[0]
             val toText = pair[1]
-            requireId(fromText, "Edge at index $edgeIndex source")
-            requireId(toText, "Edge at index $edgeIndex target")
+            requireId(fromText, "classes.Edge at index $edgeIndex source")
+            requireId(toText, "classes.Edge at index $edgeIndex target")
 
             val fromId = VertexId(fromText)
             val toId = VertexId(toText)
 
             if (!vertices.containsKey(fromId)) {
-                throw GraphParseException("Edge at index $edgeIndex references unknown source vertex '$fromText'.")
+                throw GraphParseException("classes.Edge at index $edgeIndex references unknown source vertex '$fromText'.")
             }
             if (!vertices.containsKey(toId)) {
-                throw GraphParseException("Edge at index $edgeIndex references unknown target vertex '$toText'.")
+                throw GraphParseException("classes.Edge at index $edgeIndex references unknown target vertex '$toText'.")
             }
 
             graphEdges += Edge(from = fromId, to = toId)
@@ -134,7 +143,7 @@ fun main(args: Array<String>) {
         return
     }
 
-    println("Graph loaded successfully.")
+    println("classes.Graph loaded successfully.")
     println("Vertices: ${graph.vertices.size}")
     for (vertex in graph.vertices.values) {
         println("  ${vertex.id.value}: x=${vertex.x}, y=${vertex.y}")
