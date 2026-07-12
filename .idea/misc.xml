@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ExternalStorageConfigurationManager" enabled="true" />
   <component name="FrameworkDetectionExcludesConfiguration">
+    <file type="web" url="file://$PROJECT_DIR$/kvis" />
     <file type="web" url="file://$PROJECT_DIR$/project_TopSort" />
   </component>
   <component name="ProjectRootManager" version="2">
