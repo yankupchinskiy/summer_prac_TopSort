@@ -9,6 +9,7 @@ external class VisDataSet(data: Array<Json>) {
     fun remove(id: String)
     fun update(item: Json)
     fun clear()
+    fun get(): Array<Json>
 }
 
 @JsName("vis.Network")

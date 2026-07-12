@@ -1,70 +1,65 @@
-import graphCL.*
-import logic.*
-import java.io.File
+import io.ktor.server.application.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.server.plugins.cors.routing.*
+import io.ktor.http.*
 
+// Явный импорт твоих модулей
+import graphCL.Graph
+import graphCL.Vertex
+import graphCL.VertexId
+import graphCL.Edge
+import logic.GraphResponse
+import logic.GraphRequest
+import logic.generateVisualSteps
 
+fun main() {
+    println("Запуск сервера топологической сортировки на http://localhost:8080...")
 
-fun parceJson(path: String): Graph? {
-    val input = try {
-        File(path).readText(Charsets.UTF_8)
-    } catch (e: Exception) {
-        System.err.println("Failed to read file '$path': ${e.message}")
-        return null // Возвращаем null при ошибке чтения
-    }
-
-    val graph = try {
-        GraphJsonParser.parse(input)
-    } catch (e: GraphParseException) {
-        System.err.println("Parse error: ${e.message}")
-        return null // Возвращаем null при ошибке парсинга
-    }
-
-    println("Graph loaded successfully.")
-    println("Vertices: ${graph.vertices.size}")
-    for (vertex in graph.vertices.values) {
-        println("  ${vertex.id.value}: x=${vertex.x}, y=${vertex.y}")
-    }
-    println("Edges: ${graph.edges.size}")
-    for (edge in graph.edges) {
-        println("  ${edge.from.value} -> ${edge.to.value}")
-    }
-
-    return graph // Возвращаем успешно распарсенный граф
-}
-
-fun main(args: Array<String>) {
-
-    val SortFlag = SortMode.AUTOMATIC
-
-    val path = args.firstOrNull() ?: "graph.json"
-
-    if (args.isEmpty()) {
-        println("No file path provided, using '$path'.")
-    }
-
-    val graph = parceJson(path)
-
-    if (graph == null) {
-        println("Не удалось загрузить граф. Завершение работы.")
-        return
-    }
-    if (SortFlag == SortMode.AUTOMATIC) {
-        println(" АВТОМАТИЧЕСКИЙ РЕЖИМ ")
-        val autoResult = graph.topologicalSortKahn(mode = SortMode.AUTOMATIC)
-        if (autoResult != null) {
-            println("\nИтог автоматического режима: ${autoResult.map { it.value }}")
-        } else {
-            println("\nАвтоматический режим: Топологическая сортировка невозможна (в графе есть цикл).")
+    embeddedServer(Netty, port = 8080) {
+        // Настройка CORS для общения с KVision фронтендом
+        install(CORS) {
+            anyHost()
+            allowMethod(HttpMethod.Post)
+            allowHeader(HttpHeaders.ContentType)
         }
-    }
-    else if (SortFlag == SortMode.STEP_BY_STEP) {
-        println("\n\n ПОШАГОВЫЙ РЕЖИМ ")
-        val stepByStepResult = graph.topologicalSortKahn(mode = SortMode.STEP_BY_STEP)
-        if (stepByStepResult != null) {
-            println("\nИтог пошагового режима: ${stepByStepResult?.map { it.value }}")
-        } else {
-            println("\nпошаговый режим: Топологическая сортировка невозможна (в графе есть цикл).")
 
+        // Поддержка JSON сериализации
+        install(ContentNegotiation) {
+            json()
         }
-    }
+
+        routing {
+            post("/api/topsort") {
+                try {
+                    val request = call.receive<GraphRequest>()
+
+                    // Собираем граф из пришедшего с фронтенда JSON Payload
+                    val verticesMap = request.vertices.associate { payload ->
+                        val vId = VertexId(payload.id)
+                        vId to Vertex(id = vId, x = payload.x, y = payload.y)
+                    }
+
+                    val edgesList = request.edges.map { payload ->
+                        Edge(from = VertexId(payload.from), to = VertexId(payload.to))
+                    }
+
+                    val graph = Graph(vertices = verticesMap, edges = edgesList)
+
+                    // Генерируем шаги для анимации
+                    val response = graph.generateVisualSteps()
+
+                    // Отправляем ответ обратно на фронтенд
+                    call.respond(response)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Unknown error")))
+                }
+            }
+        }
+    }.start(wait = true)
 }
