@@ -9,11 +9,11 @@ import io.ktor.server.routing.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.http.*
 
-// Явный импорт твоих модулей
 import graphCL.Graph
 import graphCL.Vertex
 import graphCL.VertexId
 import graphCL.Edge
+import graphCL.GraphJsonParser
 import logic.GraphResponse
 import logic.GraphRequest
 import logic.generateVisualSteps
@@ -41,11 +41,14 @@ fun main() {
 
                     // Собираем граф из пришедшего с фронтенда JSON Payload
                     val verticesMap = request.vertices.associate { payload ->
+                        GraphJsonParser.requireValidId(payload.id, "Vertex '${payload.id}'")
                         val vId = VertexId(payload.id)
                         vId to Vertex(id = vId, x = payload.x, y = payload.y)
                     }
 
                     val edgesList = request.edges.map { payload ->
+                        GraphJsonParser.requireValidId(payload.from, "Edge source '${payload.from}'")
+                        GraphJsonParser.requireValidId(payload.to, "Edge target '${payload.to}'")
                         Edge(from = VertexId(payload.from), to = VertexId(payload.to))
                     }
 

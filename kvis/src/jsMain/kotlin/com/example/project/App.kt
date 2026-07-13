@@ -3,11 +3,14 @@ package com.example.project
 import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLInputElement
 import org.w3c.fetch.RequestInit
 import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.json
 import kotlin.js.Json
 import kotlin.js.JSON
+import kotlin.math.ceil
+import kotlin.math.sqrt
 
 import io.kvision.Application
 import io.kvision.CoreModule
@@ -28,10 +31,15 @@ import io.kvision.utils.px
 import io.kvision.utils.perc
 import io.kvision.core.Widget
 
+private const val maxVertexIdLength = 50
+
 // DTO структуры для хранения истории шагов от бэкенда
 data class VisualNode(val id: String, val label: String, val x: Int, val y: Int, val color: String)
 data class VisualEdge(val id: String, val from: String, val to: String, val color: String)
 data class VisualStep(val description: String, val nodes: List<VisualNode>, val edges: List<VisualEdge>)
+data class ImportedVertex(val id: String, val x: Int?, val y: Int?)
+data class ImportedEdge(val from: String, val to: String)
+data class GraphPosition(val x: Int, val y: Int)
 
 class App : Application() {
     private var networkInstance: VisNetwork? = null
@@ -103,6 +111,7 @@ class App : Application() {
                             setStyle("background-color", "#393d4f")
                             setStyle("color", "#a594f9")
                             setStyle("border", "none")
+                            onClick { openGraphFilePicker() }
                         }
                     }
 
@@ -171,6 +180,229 @@ class App : Application() {
         }, 50)
     }
 
+    private fun openGraphFilePicker() {
+        val input = document.createElement("input") as HTMLInputElement
+        input.type = "file"
+        input.accept = ".json,application/json"
+
+        input.onchange = {
+            val file = input.files?.item(0)
+            if (file != null) {
+                val reader = js("new FileReader()")
+                reader.onload = {
+                    val content = reader.result?.toString()
+                    if (content == null) {
+                        statusText.content = "Ошибка: файл не удалось прочитать."
+                    } else {
+                        loadGraphFromJson(content)
+                    }
+                }
+                reader.onerror = {
+                    statusText.content = "Ошибка чтения файла."
+                }
+                reader.readAsText(file)
+            }
+        }
+
+        input.click()
+    }
+
+    @OptIn(ExperimentalWasmJsInterop::class)
+    private fun loadGraphFromJson(content: String) {
+        try {
+            val payload = JSON.parse<dynamic>(content)
+            val verticesArray = payload.vertices
+            val edgesArray = payload.edges
+
+            if (!isArray(verticesArray)) {
+                throw IllegalArgumentException("Поле vertices должно быть массивом.")
+            }
+            if (!isArray(edgesArray)) {
+                throw IllegalArgumentException("Поле edges должно быть массивом.")
+            }
+
+            val importedVertices = parseImportedVertices(verticesArray)
+            val importedEdges = parseImportedEdges(edgesArray)
+            applyImportedGraph(importedVertices, importedEdges)
+        } catch (e: Exception) {
+            statusText.content = "Ошибка загрузки JSON: ${e.message}"
+        }
+    }
+
+    private fun parseImportedVertices(verticesArray: dynamic): List<ImportedVertex> {
+        if (verticesArray.length == 0) {
+            throw IllegalArgumentException("Граф должен содержать хотя бы одну вершину.")
+        }
+
+        val ids = mutableSetOf<String>()
+        val vertices = mutableListOf<ImportedVertex>()
+
+        for (index in 0 until verticesArray.length) {
+            val item = verticesArray[index]
+            val id = if (jsTypeOf(item) == "string") {
+                item.toString()
+            } else {
+                readRequiredString(item.id, "Vertex at index $index id")
+            }
+
+            requireValidVertexId(id, "Vertex at index $index")
+            if (!ids.add(id)) {
+                throw IllegalArgumentException("JSON содержит повторяющийся id вершины '$id'.")
+            }
+
+            val x = if (jsTypeOf(item) == "string") null else readOptionalInt(item.x)
+            val y = if (jsTypeOf(item) == "string") null else readOptionalInt(item.y)
+            vertices.add(ImportedVertex(id, x, y))
+        }
+
+        return vertices
+    }
+
+    private fun parseImportedEdges(edgesArray: dynamic): List<ImportedEdge> {
+        val edges = mutableListOf<ImportedEdge>()
+
+        for (index in 0 until edgesArray.length) {
+            val item = edgesArray[index]
+            val from: String
+            val to: String
+
+            if (isArray(item)) {
+                if (item.length != 2) {
+                    throw IllegalArgumentException("Edge at index $index должен содержать ровно две вершины.")
+                }
+                from = readRequiredString(item[0], "Edge at index $index source")
+                to = readRequiredString(item[1], "Edge at index $index target")
+            } else {
+                from = readRequiredString(item.from, "Edge at index $index source")
+                to = readRequiredString(item.to, "Edge at index $index target")
+            }
+
+            requireValidVertexId(from, "Edge at index $index source")
+            requireValidVertexId(to, "Edge at index $index target")
+            edges.add(ImportedEdge(from, to))
+        }
+
+        return edges
+    }
+
+    @OptIn(ExperimentalWasmJsInterop::class)
+    private fun applyImportedGraph(vertices: List<ImportedVertex>, edges: List<ImportedEdge>) {
+        val vertexIds = vertices.map { it.id }.toSet()
+        edges.forEachIndexed { index, edge ->
+            if (!vertexIds.contains(edge.from)) {
+                throw IllegalArgumentException("Edge at index $index ссылается на неизвестную вершину '${edge.from}'.")
+            }
+            if (!vertexIds.contains(edge.to)) {
+                throw IllegalArgumentException("Edge at index $index ссылается на неизвестную вершину '${edge.to}'.")
+            }
+        }
+
+        isExecutionMode = false
+        stepsList.clear()
+        currentStepIndex = 0
+        startSortButton.disabled = false
+        stopButton.disabled = true
+        stepBackwardButton.disabled = true
+        stepForwardButton.disabled = true
+        resetEdgeSelection()
+
+        currentNodes.clear()
+        currentEdges.clear()
+
+        val centeredPositions = buildCenteredPositions(vertices)
+        vertices.forEachIndexed { index, vertex ->
+            val position = centeredPositions[index]
+
+            currentNodes.add(json(
+                "id" to vertex.id,
+                "label" to vertex.id,
+                "x" to position.x,
+                "y" to position.y,
+                "color" to "#5bc0de"
+            ))
+        }
+
+        edges.forEachIndexed { index, edge ->
+            currentEdges.add(json(
+                "id" to "e_${edge.from}_${edge.to}_$index",
+                "from" to edge.from,
+                "to" to edge.to
+            ))
+        }
+
+        nodeCounter = calculateNextNodeCounter(vertices.map { it.id })
+        statusText.content = "Граф загружен из файла: ${vertices.size} вершин, ${edges.size} рёбер."
+        fitGraphToCanvas()
+    }
+
+    private fun buildCenteredPositions(vertices: List<ImportedVertex>): List<GraphPosition> {
+        val columns = maxOf(1, ceil(sqrt(vertices.size.toDouble())).toInt())
+        val positions = vertices.mapIndexed { index, vertex ->
+            val row = index / columns
+            val column = index % columns
+            GraphPosition(
+                x = vertex.x ?: (column * 180),
+                y = vertex.y ?: (row * 120)
+            )
+        }
+
+        val minX = positions.minOf { it.x }
+        val maxX = positions.maxOf { it.x }
+        val minY = positions.minOf { it.y }
+        val maxY = positions.maxOf { it.y }
+        val centerX = (minX + maxX) / 2
+        val centerY = (minY + maxY) / 2
+
+        return positions.map { position ->
+            GraphPosition(
+                x = position.x - centerX,
+                y = position.y - centerY
+            )
+        }
+    }
+
+    private fun fitGraphToCanvas() {
+        window.setTimeout({
+            networkInstance?.fit(json(
+                "animation" to json(
+                    "duration" to 250,
+                    "easingFunction" to "easeInOutQuad"
+                )
+            ))
+        }, 50)
+    }
+
+    private fun requireValidVertexId(id: String, owner: String) {
+        if (id.isBlank()) {
+            throw IllegalArgumentException("$owner is empty.")
+        }
+        if (id.length > maxVertexIdLength) {
+            throw IllegalArgumentException("$owner exceeds $maxVertexIdLength characters.")
+        }
+    }
+
+    private fun readRequiredString(value: dynamic, owner: String): String {
+        if (value == null || jsTypeOf(value) == "undefined") {
+            throw IllegalArgumentException("$owner is missing.")
+        }
+        return value.toString()
+    }
+
+    private fun readOptionalInt(value: dynamic): Int? {
+        if (value == null || jsTypeOf(value) == "undefined") {
+            return null
+        }
+        val number = js("Number(value)").unsafeCast<Double>()
+        return if (js("Number.isFinite(number)").unsafeCast<Boolean>()) number.toInt() else null
+    }
+
+    private fun isArray(value: dynamic): Boolean = js("Array.isArray(value)").unsafeCast<Boolean>()
+
+    private fun calculateNextNodeCounter(ids: List<String>): Int {
+        val maxNumericId = ids.mapNotNull { it.toIntOrNull() }.maxOrNull()
+        return (maxNumericId ?: 0) + 1
+    }
+
     // ОТПРАВКА ДАННЫХ НА TOR БЭКЕНД
     @OptIn(ExperimentalWasmJsInterop::class)
     private fun sendGraphToBackend() {
@@ -230,7 +462,7 @@ class App : Application() {
 
                         if (hasCycle) {
                             statusText.content = "Ошибка: В графе есть циклическая зависимость! Топологическая сортировка невозможна."
-                            exitExecutionMode()
+                            resetExecutionControls()
                         } else {
                             stepsList.clear()
                             val stepsArray = serverResult.steps.unsafeCast<Array<dynamic>>()
@@ -304,13 +536,19 @@ class App : Application() {
     }
 
     private fun exitExecutionMode() {
+        resetExecutionControls()
+        statusText.content = "Режим симуляции прерван. Вы можете редактировать граф."
+        initInteractiveGraph()
+    }
+
+    private fun resetExecutionControls() {
         isExecutionMode = false
+        stepsList.clear()
+        currentStepIndex = 0
         startSortButton.disabled = false
         stopButton.disabled = true
         stepBackwardButton.disabled = true
         stepForwardButton.disabled = true
-        statusText.content = "Режим симуляции прерван. Вы можете редактировать граф."
-        initInteractiveGraph()
     }
 
     @OptIn(ExperimentalWasmJsInterop::class)

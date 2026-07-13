@@ -16,6 +16,7 @@ external class VisDataSet(data: Array<Json>) {
 external class VisNetwork(container: HTMLElement, data: Json, options: Json) {
     fun setOptions(options: Json)
     fun destroy()
+    fun fit(options: Json = definedExternally)
     fun getNodeAt(position: Json): String? // Возвращает ID вершины по координатам клика
     fun on(event: String, callback: (Json) -> Unit)
 }

@@ -11,6 +11,8 @@ private data class GraphPayload(
 )
 
 object GraphJsonParser {
+    private const val maxVertexIdLength = 50
+
     private val json = Json {
         ignoreUnknownKeys = false
     }
@@ -28,7 +30,7 @@ object GraphJsonParser {
 
         val ids = payload.vertices.toMutableList()
         for ((index, id) in ids.withIndex()) {
-            requireId(id, "Vertex at index $index")
+            requireValidId(id, "Vertex at index $index")
         }
 
         if (ids.size != ids.toSet().size) {
@@ -45,8 +47,8 @@ object GraphJsonParser {
 
             val fromText = pair[0]
             val toText = pair[1]
-            requireId(fromText, "Edge at index $edgeIndex source")
-            requireId(toText, "Edge at index $edgeIndex target")
+            requireValidId(fromText, "Edge at index $edgeIndex source")
+            requireValidId(toText, "Edge at index $edgeIndex target")
 
             val fromId = VertexId(fromText)
             val toId = VertexId(toText)
@@ -64,9 +66,12 @@ object GraphJsonParser {
         return Graph(vertices = vertices, edges = graphEdges)
     }
 
-    private fun requireId(id: String, owner: String) {
+    fun requireValidId(id: String, owner: String) {
         if (id.isBlank()) {
             throw GraphParseException("$owner is empty.")
+        }
+        if (id.length > maxVertexIdLength) {
+            throw GraphParseException("$owner exceeds $maxVertexIdLength characters.")
         }
     }
 
