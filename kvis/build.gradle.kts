@@ -36,6 +36,7 @@ kotlin {
         implementation("io.kvision:kvision-bootstrap:$kvisionVersion")
         implementation("io.kvision:kvision-bootstrap-upload:$kvisionVersion")
         implementation("io.kvision:kvision-state:$kvisionVersion")
+        implementation(npm("vis-network", "9.1.9"))
     }
     sourceSets["jsTest"].dependencies {
         implementation(kotlin("test-js"))

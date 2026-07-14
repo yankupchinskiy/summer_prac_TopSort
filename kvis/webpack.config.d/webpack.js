@@ -18,3 +18,8 @@ config.performance = {
       return !assetFilename.endsWith('.js');
     },
 };
+
+const webpack = require("webpack");
+config.plugins.push(new webpack.ProvidePlugin({
+    vis: "vis-network/standalone/esm/vis-network.js"
+}));
