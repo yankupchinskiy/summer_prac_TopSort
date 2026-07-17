@@ -30,6 +30,7 @@ data class GraphRequest(
 )
 
 @Serializable
+@Serializable
 data class RequestNode(
     val id: String,
     val x: Int = 0,

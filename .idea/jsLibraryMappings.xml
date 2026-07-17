@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="JavaScriptLibraryMappings">
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages/project-test/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages/project/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages_imported/kvision-project-kvision-modules-kvision-bootstrap-upload/9.6.0/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages_imported/kvision-project-kvision-modules-kvision-bootstrap/9.6.0/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages_imported/kvision-project-kvision-modules-kvision-jquery/9.6.0/node_modules" />
+    <excludedPredefinedLibrary name="summer_prac_TopSort/kvis/build/js/packages_imported/kvision-project-kvision/9.6.0/node_modules" />
+  </component>
+</project>
